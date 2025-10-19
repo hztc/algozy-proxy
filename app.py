@@ -1,5 +1,6 @@
 from flask import Flask, Response
 import requests
+import os
 
 app = Flask(__name__)
 
@@ -14,21 +15,28 @@ def get_instruments():
         "secretKey": SECRET,
         "source": "WEBAPI"
     })
-    token = auth.json()["result"]["token"]
+    if auth.status_code != 200:
+        return f"Login failed: {auth.text}", 500
 
+    token = auth.json()["result"]["token"]
     csv_data = ""
+
     for exch in ["NSECM", "BSECM"]:
-        headers = {"AuthorizationToken": token, "x-source": "WEBAPI"}
+        headers = {
+            "AuthorizationToken": token,
+            "x-source": "WEBAPI"
+        }
         r = requests.get(f"{BASE}/instruments-master?exchangeSegmentList={exch}", headers=headers)
         if r.status_code == 200:
             csv_data += r.text
         else:
-            print(f"⚠️ Failed {exch}: {r.status_code}")
-    return Response(csv_data, mimetype="text/csv")
+            csv_data += f"⚠️ {exch} fetch failed ({r.status_code})\n"
+    return Response(csv_data, mimetype="text/plain")
 
 @app.route('/')
 def home():
-    return "✅ Algozy XTS Proxy is running!"
+    return "✅ Algozy Proxy is alive!"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
